@@ -4,6 +4,7 @@ import { CloudSun } from "lucide-react";
 import SearchForm from "@/components/search-form";
 import WeatherCard from "@/components/weather-card";
 import WeatherDetails from "@/components/weather-details";
+import ForecastCard from "@/components/forecast-card";
 import RecentSearches from "@/components/recent-searches";
 import { Card, CardContent } from "@/components/ui/card";
 import type { WeatherData, RecentSearch } from "@shared/schema";
@@ -108,13 +109,16 @@ export default function WeatherPage() {
 
         {/* Weather Display */}
         {weatherData && !isLoading && !error && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <div className="lg:col-span-2">
-              <WeatherCard weatherData={weatherData} />
+          <div className="space-y-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <WeatherCard weatherData={weatherData} />
+              </div>
+              <div>
+                <WeatherDetails weatherData={weatherData} />
+              </div>
             </div>
-            <div>
-              <WeatherDetails weatherData={weatherData} />
-            </div>
+            <ForecastCard forecast={weatherData.forecast} />
           </div>
         )}
 

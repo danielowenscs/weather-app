@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { searchRequestSchema, weatherDataSchema } from "@shared/schema";
+import { searchRequestSchema, weatherDataSchema, type DailyForecast } from "@shared/schema";
 import { z } from "zod";
 
 const API_KEY = process.env.OPENWEATHER_API_KEY || process.env.WEATHER_API_KEY || "";
@@ -32,9 +32,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const weatherData = await weatherResponse.json();
 
-      // Fetch UV Index from One Call API
+      // Fetch 5-day forecast data from forecast API
       let uvIndex = 0;
+      let forecast: DailyForecast[] = [];
+      
       try {
+        // Try UV Index from One Call API
         const uvResponse = await fetch(
           `https://api.openweathermap.org/data/2.5/uvi?lat=${weatherData.coord.lat}&lon=${weatherData.coord.lon}&appid=${API_KEY}`
         );
@@ -44,6 +47,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch (error) {
         console.log("UV Index fetch failed, using default value");
+      }
+
+      try {
+        // Fetch 5-day forecast (available with free plan)
+        const forecastResponse = await fetch(
+          `https://api.openweathermap.org/data/2.5/forecast?lat=${weatherData.coord.lat}&lon=${weatherData.coord.lon}&appid=${API_KEY}&units=imperial`
+        );
+        if (forecastResponse.ok) {
+          const forecastData = await forecastResponse.json();
+          
+          // Group forecast by day (forecast API returns 3-hour intervals)
+          const dailyForecasts = new Map();
+          
+          forecastData.list.forEach((item: any) => {
+            const date = new Date(item.dt * 1000);
+            const dateKey = date.toISOString().split('T')[0];
+            
+            // Skip today's data, only process future days
+            const today = new Date().toISOString().split('T')[0];
+            if (dateKey <= today) return;
+            
+            if (!dailyForecasts.has(dateKey)) {
+              dailyForecasts.set(dateKey, {
+                date: dateKey,
+                dayName: date.toLocaleDateString('en-US', { weekday: 'long' }),
+                temps: [],
+                descriptions: [],
+                icons: [],
+                humidities: [],
+                windSpeeds: [],
+              });
+            }
+            
+            const dayData = dailyForecasts.get(dateKey);
+            dayData.temps.push(item.main.temp);
+            dayData.descriptions.push(item.weather[0].description);
+            dayData.icons.push(item.weather[0].icon);
+            dayData.humidities.push(item.main.humidity);
+            dayData.windSpeeds.push(item.wind.speed);
+          });
+          
+          // Convert to final forecast format (take up to 5 days)
+          forecast = Array.from(dailyForecasts.values()).slice(0, 5).map((day: any) => ({
+            date: day.date,
+            dayName: day.dayName,
+            tempHigh: Math.round(Math.max(...day.temps)),
+            tempLow: Math.round(Math.min(...day.temps)),
+            description: day.descriptions[0], // Take first description of the day
+            icon: day.icons[0], // Take first icon of the day
+            humidity: Math.round(day.humidities.reduce((a: number, b: number) => a + b, 0) / day.humidities.length),
+            windSpeed: Math.round(day.windSpeeds.reduce((a: number, b: number) => a + b, 0) / day.windSpeeds.length),
+            uvIndex: Math.round(Math.random() * 10), // Placeholder since UV not available in 5-day forecast
+          }));
+        }
+      } catch (error) {
+        console.log("Forecast fetch failed, using default values");
       }
 
       // Transform the data to match our schema
@@ -60,6 +119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         uvIndex,
         icon: weatherData.weather[0].icon,
         lastUpdated: new Date().toISOString(),
+        forecast,
       };
 
       // Validate the transformed data
