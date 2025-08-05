@@ -56,7 +56,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         humidity: weatherData.main.humidity,
         windSpeed: Math.round(weatherData.wind.speed),
         visibility: Math.round(weatherData.visibility / 1609.34), // Convert meters to miles
-        pressure: (weatherData.main.pressure * 0.02953).toFixed(2), // Convert hPa to inches
+        pressure: parseFloat((weatherData.main.pressure * 0.02953).toFixed(2)), // Convert hPa to inches
         uvIndex,
         icon: weatherData.weather[0].icon,
         lastUpdated: new Date().toISOString(),
